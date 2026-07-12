@@ -3,6 +3,10 @@ bin/
 server/web/dist/
 server/content/
 
+# 运行时数据(SQLite、上传图片)
+data/
+server/data/
+
 # Node
 node_modules/
 web/dist/

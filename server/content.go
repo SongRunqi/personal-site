@@ -30,6 +30,7 @@ type PostMeta struct {
 	Tags    []string  `json:"tags"`
 	Summary string    `json:"summary"`
 	Draft   bool      `json:"-"`
+	Source  string    `json:"source,omitempty"` // file(仓库)或 db(网页发布)
 }
 
 // Post 是单篇文章,正文为渲染后的 HTML。

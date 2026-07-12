@@ -20,6 +20,9 @@ var contentEmbed embed.FS
 
 var autoReload = false
 
+// 生产模式没有开发用路由。
+func registerDevRoutes(*server, *http.ServeMux) {}
+
 func contentFS() fs.FS {
 	sub, err := fs.Sub(contentEmbed, "content")
 	if err != nil {

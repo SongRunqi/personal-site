@@ -9,18 +9,57 @@ import (
 	"testing"
 )
 
-func newTestServer(t *testing.T) *httptest.Server {
+func newTestEnv(t *testing.T) (*server, *httptest.Server) {
 	t.Helper()
 	store := NewStore(testFS())
 	if err := store.Reload(); err != nil {
 		t.Fatalf("Reload: %v", err)
 	}
-	srv := &server{store: store, baseURL: "https://example.com"}
+	db, err := openDB(t.TempDir())
+	if err != nil {
+		t.Fatalf("openDB: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	srv := &server{store: store, db: db, baseURL: "https://example.com", dataDir: t.TempDir()}
 	mux := http.NewServeMux()
 	srv.routes(mux)
 	ts := httptest.NewServer(mux)
 	t.Cleanup(ts.Close)
+	return srv, ts
+}
+
+func newTestServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	_, ts := newTestEnv(t)
 	return ts
+}
+
+// sessionCookieFor 直接造一个已登录用户的会话 cookie。
+// admin=true 时用默认 ADMIN_EMAILS 里的邮箱,走真实的管理员判定。
+func sessionCookieFor(t *testing.T, s *server, name string, admin bool) *http.Cookie {
+	t.Helper()
+	email := name + "@test.local"
+	if admin {
+		email = "yitiansong4@gmail.com"
+	}
+	u, err := s.upsertUser("test", name, email, name, "")
+	if err != nil {
+		t.Fatalf("upsertUser: %v", err)
+	}
+	if u.IsAdmin != admin {
+		t.Fatalf("isAdmin = %v, want %v", u.IsAdmin, admin)
+	}
+	rec := httptest.NewRecorder()
+	if err := s.createSession(rec, u.ID); err != nil {
+		t.Fatalf("createSession: %v", err)
+	}
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == sessionCookie {
+			return c
+		}
+	}
+	t.Fatal("没有拿到会话 cookie")
+	return nil
 }
 
 func getJSON(t *testing.T, url string, v any) *http.Response {

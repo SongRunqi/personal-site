@@ -38,7 +38,7 @@ type rssCDATA struct {
 }
 
 func (s *server) handleFeed(w http.ResponseWriter, r *http.Request) {
-	posts := s.store.FullPosts()
+	posts := s.mergedFullPosts()
 	if len(posts) > rssLimit {
 		posts = posts[:rssLimit]
 	}
