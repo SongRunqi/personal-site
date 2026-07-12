@@ -1,6 +1,7 @@
 # Go
 bin/
 server/web/dist/
+server/content/
 
 # Node
 node_modules/

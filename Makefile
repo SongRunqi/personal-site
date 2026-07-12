@@ -17,19 +17,21 @@ dev-web:
 
 build:
 	cd web && bun install --frozen-lockfile && bun run build
-	rm -rf server/web/dist
+	rm -rf server/web/dist server/content
 	mkdir -p server/web
 	cp -R web/dist server/web/dist
+	cp -R content server/content
 	cd server && go build -o ../bin/site .
 	@echo "✓ 构建完成:bin/site"
 
+# -tags dev:测试不依赖 embed 产物(server/web/dist、server/content)
 test:
-	cd server && go test ./...
+	cd server && go test -tags dev ./...
 	cd web && bunx tsc --noEmit
 
 lint:
-	cd server && go vet ./...
+	cd server && go vet -tags dev ./...
 	cd web && bun run lint
 
 clean:
-	rm -rf bin server/web/dist web/dist
+	rm -rf bin server/web/dist server/content web/dist
