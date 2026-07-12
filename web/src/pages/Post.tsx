@@ -1,9 +1,13 @@
 import { useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useFetch, formatDate, type Post as PostData } from '../api'
+import { useAuth } from '../auth'
+import Likes from '../components/Likes'
+import Comments from '../components/Comments'
 
 export default function Post() {
   const { slug } = useParams<{ slug: string }>()
+  const { user } = useAuth()
   const { data, error, loading } = useFetch<PostData>(`/api/posts/${slug}`)
 
   useEffect(() => {
@@ -34,8 +38,19 @@ export default function Post() {
                   ))}
                 </span>
               )}
+              {user?.isAdmin && data.source === 'db' && (
+                <Link className="post-edit" to={`/write/${data.slug}`}>
+                  编辑
+                </Link>
+              )}
             </p>
             <div className="prose" dangerouslySetInnerHTML={{ __html: data.html }} />
+            {slug && (
+              <>
+                <Likes slug={slug} />
+                <Comments slug={slug} />
+              </>
+            )}
           </>
         )}
       </article>

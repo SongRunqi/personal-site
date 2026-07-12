@@ -8,6 +8,8 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:8080',
       '/feed.xml': 'http://localhost:8080',
+      '/auth': 'http://localhost:8080',
+      '/uploads': 'http://localhost:8080',
     },
   },
 })

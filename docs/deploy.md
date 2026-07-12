@@ -3,15 +3,33 @@
 目标环境:腾讯云香港轻量应用服务器(免备案),与 onething 官网同一套思路。
 域名还没买,下文一律用 `example.com` 占位,买好后全局替换即可。
 
-整站是**一个二进制**(前端产物和 content/ 都 embed 在里面),部署没有任何
-运行时依赖:没有 Node、没有数据库,扔一个文件上去就能跑。
+整站是**一个二进制**(前端产物和 content/ 都 embed 在里面),没有 Node、
+没有外部数据库。动态数据(登录用户、网页发布的文章、点赞、评论、上传图片)
+存在 `DATA_DIR` 下的 SQLite 库和 uploads 目录里——**这个目录要持久化、要备份**。
 
-配置只有两个环境变量:
+环境变量:
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `ADDR` | `:8080` | 监听地址 |
-| `SITE_BASE_URL` | `http://localhost:8080` | RSS 里绝对链接的前缀,生产填 `https://example.com` |
+| `SITE_BASE_URL` | `http://localhost:8080` | 站点对外地址,生产填 `https://example.com`(RSS 链接、OAuth 回调都用它拼) |
+| `DATA_DIR` | `./data` | SQLite + 上传图片的目录 |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | 空 | Google 登录;不填则登录页该按钮置灰 |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | 空 | GitHub 登录;同上 |
+| `ADMIN_EMAILS` | `yitiansong4@gmail.com` | 逗号分隔;登录邮箱命中即为站长(能发文章、删评论) |
+| `ADMIN_GITHUB_LOGINS` | `SongRunqi` | 逗号分隔;GitHub 登录名命中即为站长 |
+
+## OAuth 应用配置(各做一次)
+
+- **GitHub**:Settings → Developer settings → OAuth Apps → New。
+  - Homepage:`https://example.com`
+  - Authorization callback URL:`https://example.com/auth/github/callback`
+- **Google**:[console.cloud.google.com](https://console.cloud.google.com) →
+  APIs & Services → Credentials → Create OAuth client ID(Web application)。
+  - Authorized redirect URI:`https://example.com/auth/google/callback`
+
+拿到的 client id / secret 填进环境变量。本地开发不配也行:
+`make dev` 下有 `/auth/dev/login?admin=1` 假登录(只编译进 dev 版)。
 
 ## 方式一:systemd 直跑二进制(推荐,最省事)
 
@@ -49,12 +67,19 @@ After=network.target
 ExecStart=/usr/local/bin/personal-site
 Environment=ADDR=127.0.0.1:8080
 Environment=SITE_BASE_URL=https://example.com
+Environment=DATA_DIR=/var/lib/personal-site
+Environment=GITHUB_CLIENT_ID=xxx
+Environment=GITHUB_CLIENT_SECRET=xxx
+Environment=GOOGLE_CLIENT_ID=xxx
+Environment=GOOGLE_CLIENT_SECRET=xxx
 Restart=always
 RestartSec=3
 User=www-data
+StateDirectory=personal-site
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
+ReadWritePaths=/var/lib/personal-site
 
 [Install]
 WantedBy=multi-user.target
@@ -78,8 +103,13 @@ docker build -t personal-site .
 docker run -d --name site --restart always \
   -p 127.0.0.1:8080:8080 \
   -e SITE_BASE_URL=https://example.com \
+  -e GITHUB_CLIENT_ID=xxx -e GITHUB_CLIENT_SECRET=xxx \
+  -e GOOGLE_CLIENT_ID=xxx -e GOOGLE_CLIENT_SECRET=xxx \
+  -v site-data:/data \
   personal-site
 ```
+
+`-v site-data:/data` 是动态数据卷,重建容器不丢文章、点赞和评论。
 
 ## 反代 + HTTPS
 
@@ -132,6 +162,16 @@ cd ~/personal-site && git pull \
 想更省事,可以把服务器那几行存成 `~/redeploy.sh`,本地
 `git push && ssh 服务器 ./redeploy.sh` 一条龙;以后有需要再上 GitHub
 Actions 自动化,现阶段手动跑一下足够了。
+
+## 备份
+
+动态数据全在 `DATA_DIR` 里(`site.db` + `uploads/`),定期打包即可:
+
+```bash
+tar czf ~/site-backup-$(date +%F).tgz -C /var/lib/personal-site .
+# Docker 卷的话:docker run --rm -v site-data:/data -v ~:/backup alpine \
+#   tar czf /backup/site-backup.tgz -C /data .
+```
 
 ## 常用检查
 

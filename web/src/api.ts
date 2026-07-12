@@ -6,6 +6,49 @@ export interface PostMeta {
   date: string
   tags: string[] | null
   summary: string
+  source?: 'file' | 'db'
+}
+
+export interface Me {
+  id: number
+  name: string
+  avatarUrl: string
+  isAdmin: boolean
+  provider: string
+}
+
+export interface CommentItem {
+  id: number
+  body: string
+  createdAt: string
+  author: { name: string; avatarUrl: string }
+  mine: boolean
+}
+
+export interface ArticleDraft {
+  slug: string
+  title: string
+  markdown: string
+  summary: string
+  tags: string[]
+  draft: boolean
+  date?: string
+  publishedAt?: string
+  source?: 'file' | 'db'
+}
+
+// requestJSON:带 cookie 的 JSON 请求,失败时抛出后端给的中文错误信息。
+export async function requestJSON<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
+    ...init,
+  })
+  const text = await res.text()
+  const data = text ? JSON.parse(text) : null
+  if (!res.ok) {
+    throw new Error(data?.error ?? `HTTP ${res.status}`)
+  }
+  return data as T
 }
 
 export interface Post extends PostMeta {
