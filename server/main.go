@@ -6,16 +6,28 @@ import (
 	"os"
 )
 
-func main() {
-	addr := os.Getenv("ADDR")
-	if addr == "" {
-		addr = ":8080"
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
 	}
+	return fallback
+}
+
+func main() {
+	addr := envOr("ADDR", ":8080")
+	baseURL := envOr("SITE_BASE_URL", "http://localhost:8080")
+
+	store := NewStore(contentFS())
+	store.AutoReload = autoReload
+	if err := store.Reload(); err != nil {
+		log.Fatalf("加载内容失败:%v", err)
+	}
+
+	srv := &server{store: store, baseURL: baseURL}
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.Write([]byte(`{"ok":true}`))
-	})
-	log.Printf("listening on %s", addr)
+	srv.routes(mux)
+	mux.Handle("/", webHandler())
+
+	log.Printf("listening on %s (base URL %s)", addr, baseURL)
 	log.Fatal(http.ListenAndServe(addr, mux))
 }
