@@ -1,0 +1,20 @@
+projects:
+  - name: onething(一事)
+    tagline: 会动手的开源桌面 AI 助手
+    description: >-
+      接入 OpenAI、Claude、DeepSeek、Gemini、Kimi、智谱等十余家模型,
+      并能在本地读写文件、执行命令、调用技能(Skills)与 MCP 服务器。
+      聊天之外,把事情做完;每一次动手,都先经过你的许可。
+    url: https://github.com/SongRunqi/one-thing
+    repo: https://github.com/SongRunqi/one-thing
+    stack: [Electron, Vue, TypeScript]
+    status: active
+  - name: TransReader
+    tagline: macOS 菜单栏翻译工具
+    description: >-
+      常驻菜单栏的轻量翻译工具,划词即翻,不打断阅读。
+      为自己读英文文档时顺手做的小工具。
+    url: ""
+    repo: ""
+    stack: [Python, macOS]
+    status: active

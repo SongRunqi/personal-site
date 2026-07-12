@@ -1,0 +1,13 @@
+# Go
+bin/
+server/web/dist/
+
+# Node
+node_modules/
+web/dist/
+
+# 编辑器 / 系统
+.DS_Store
+*.log
+.idea/
+.vscode/
