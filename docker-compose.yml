@@ -22,7 +22,8 @@ services:
     ports:
       - '127.0.0.1:8080:8080' # 只对本机开,外网走 Caddy/Nginx 反代
     environment:
-      DATABASE_URL: postgres://site:${POSTGRES_PASSWORD:-site}@db:5432/site?sslmode=disable
+      # key/value 形式的 DSN:密码含 @ / : 等特殊字符也不会解析出错
+      DATABASE_URL: host=db user=site password=${POSTGRES_PASSWORD:-site} dbname=site sslmode=disable
       SITE_BASE_URL: ${SITE_BASE_URL:-http://localhost:8080}
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
