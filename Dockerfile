@@ -15,6 +15,8 @@ RUN bun run build
 FROM golang:1.25-alpine AS build
 # GitHub OAuth 的出站 HTTPS 需要 CA 证书,连同二进制一起拷进 scratch
 RUN apk add --no-cache ca-certificates
+# 国内服务器连不上 proxy.golang.org,换国内镜像
+ENV GOPROXY=https://goproxy.cn,direct
 WORKDIR /src
 COPY server/go.mod server/go.sum ./server/
 RUN cd server && go mod download
