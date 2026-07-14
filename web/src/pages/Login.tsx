@@ -8,11 +8,6 @@ interface ProviderInfo {
   configured: boolean
 }
 
-const providerLabel: Record<string, { label: string; mark: string }> = {
-  google: { label: '用 Google 登录', mark: 'G' },
-  github: { label: '用 GitHub 登录', mark: 'GH' },
-}
-
 export default function Login() {
   useEffect(() => {
     document.title = '登录 · 宋一天'
@@ -21,7 +16,9 @@ export default function Login() {
   const { user } = useAuth()
   const [params] = useSearchParams()
   const returnTo = params.get('return_to') ?? '/'
+  const denied = params.get('error') === 'owner-only'
   const { data, loading } = useFetch<ProviderInfo[]>('/api/auth/providers')
+  const github = data?.find((p) => p.name === 'github')
 
   if (user) {
     return <Navigate to={returnTo} replace />
@@ -30,33 +27,31 @@ export default function Login() {
   return (
     <div className="wrap login-page">
       <header className="page-head">
-        <h1>登录</h1>
-        <p>登录后可以点赞、留言。只取头像和昵称,不往你的账号里写任何东西。</p>
+        <h1>站长入口</h1>
+        <p>这里是后台的门:用 GitHub 登录后可以在网页上直接写文章、发布、删评论。</p>
       </header>
+      {denied && (
+        <p className="form-error">这个 GitHub 账号不是站长,本站暂不开放访客登录。</p>
+      )}
       <div className="login-buttons">
         {loading && <p className="state-note">加载中…</p>}
-        {data?.map((p) => {
-          const meta = providerLabel[p.name] ?? { label: p.name, mark: '' }
-          return p.configured ? (
+        {github &&
+          (github.configured ? (
             <a
-              key={p.name}
               className="login-btn"
-              href={`/auth/${p.name}/login?return_to=${encodeURIComponent(returnTo)}`}
+              href={`/auth/github/login?return_to=${encodeURIComponent(returnTo)}`}
             >
-              <span className="login-mark">{meta.mark}</span>
-              {meta.label}
+              <span className="login-mark">GH</span>
+              用 GitHub 登录
             </a>
           ) : (
-            <span key={p.name} className="login-btn disabled" title="该登录方式尚未配置">
-              <span className="login-mark">{meta.mark}</span>
-              {meta.label}(未配置)
+            <span className="login-btn disabled" title="尚未配置 GITHUB_CLIENT_ID / SECRET">
+              <span className="login-mark">GH</span>
+              用 GitHub 登录(未配置)
             </span>
-          )
-        })}
+          ))}
       </div>
-      <p className="login-note">
-        登录即表示同意本站将你的公开昵称与头像用于展示点赞和留言。
-      </p>
+      <p className="login-note">只有站长本人的 GitHub 账号能进来;其他账号会被礼貌地请回。</p>
     </div>
   )
 }

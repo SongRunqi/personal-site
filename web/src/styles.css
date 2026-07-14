@@ -1066,8 +1066,83 @@ button:focus-visible {
 .write-preview .prose {
   padding-block: 16px 40px;
 }
-.write-existing {
-  margin-top: 56px;
+.write-head-left {
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+}
+.write-head-left .post-back {
+  margin-top: 0;
+}
+.write-status.dirty {
+  color: var(--seal);
+}
+.char-count {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-faded);
+}
+.recover-note {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border: 1px dashed var(--seal);
+  border-radius: 4px 8px 5px 9px;
+  font-size: 0.9rem;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.recover-note button {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--seal);
+  cursor: pointer;
+  border-bottom: 1px solid var(--seal);
+  padding: 0 0 1px;
+}
+
+/* ---------- 文章管理 ---------- */
+.manage-page {
+  max-width: var(--measure-wide);
+  padding-block: 40px 80px;
+}
+.manage-group {
+  margin-top: 40px;
+}
+.manage-group .section-head {
+  margin-bottom: 8px;
+}
+.manage-date {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-faded);
+  white-space: nowrap;
+}
+.manage-ops {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 14px;
+  align-items: baseline;
+}
+.manage-ops a {
+  font-size: 0.85rem;
+  color: var(--seal);
+}
+.manage-ops button {
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--ink-faded);
+  cursor: pointer;
+}
+.manage-ops button:hover {
+  color: var(--seal);
 }
 .manage-list {
   list-style: none;
@@ -1098,11 +1173,6 @@ button:focus-visible {
 }
 .manage-title {
   font-family: var(--font-display);
-}
-.manage-list a {
-  margin-left: auto;
-  font-size: 0.85rem;
-  color: var(--seal);
 }
 .manage-note {
   margin-left: auto;

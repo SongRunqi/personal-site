@@ -6,6 +6,7 @@ import Post from './pages/Post'
 import About from './pages/About'
 import Login from './pages/Login'
 import Write from './pages/Write'
+import Manage from './pages/Manage'
 import { AuthProvider, useAuth } from './auth'
 
 function UserArea() {
@@ -68,7 +69,8 @@ export default function App() {
           <Route path="/blog/:slug" element={<Post />} />
           <Route path="/about" element={<About />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/write" element={<Write />} />
+          <Route path="/write" element={<Manage />} />
+          <Route path="/write/new" element={<Write />} />
           <Route path="/write/:slug" element={<Write />} />
           <Route
             path="*"

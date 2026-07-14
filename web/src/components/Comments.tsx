@@ -107,8 +107,9 @@ export default function Comments({ slug }: { slug: string }) {
         </form>
       ) : (
         <p className="comment-login-note">
+          留言需要
           <Link to={`/login?return_to=${encodeURIComponent(location.pathname)}`}>登录</Link>
-          后可以留言。
+          ,本站目前只开放站长登录。
         </p>
       )}
     </section>

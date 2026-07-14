@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -15,11 +16,19 @@ func newTestEnv(t *testing.T) (*server, *httptest.Server) {
 	if err := store.Reload(); err != nil {
 		t.Fatalf("Reload: %v", err)
 	}
-	db, err := openDB(t.TempDir())
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("跳过:需要 TEST_DATABASE_URL(make test 会自动起临时 PG 容器)")
+	}
+	db, err := openDB(url)
 	if err != nil {
 		t.Fatalf("openDB: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
+	// 同一个库跑所有测试,开始前清空,保证互不干扰
+	if _, err := db.Exec("TRUNCATE users, sessions, articles, likes, comments RESTART IDENTITY CASCADE"); err != nil {
+		t.Fatalf("清空测试库: %v", err)
+	}
 	srv := &server{store: store, db: db, baseURL: "https://example.com", dataDir: t.TempDir()}
 	mux := http.NewServeMux()
 	srv.routes(mux)

@@ -3,9 +3,10 @@ bin/
 server/web/dist/
 server/content/
 
-# 运行时数据(SQLite、上传图片)
+# 运行时数据(上传图片)与环境配置
 data/
 server/data/
+.env
 
 # Node
 node_modules/

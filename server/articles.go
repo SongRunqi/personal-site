@@ -61,27 +61,21 @@ const articleCols = "id, slug, title, markdown, html, summary, tags, draft, crea
 func scanArticle(row interface{ Scan(...any) error }) (*Article, error) {
 	var a Article
 	var tags string
-	var draft int
-	var created, updated string
-	var published sql.NullString
+	var published sql.NullTime
 	if err := row.Scan(&a.ID, &a.Slug, &a.Title, &a.Markdown, &a.HTML, &a.Summary,
-		&tags, &draft, &created, &updated, &published); err != nil {
+		&tags, &a.Draft, &a.CreatedAt, &a.UpdatedAt, &published); err != nil {
 		return nil, err
 	}
-	a.Draft = draft == 1
 	json.Unmarshal([]byte(tags), &a.Tags)
-	a.CreatedAt, _ = time.Parse(time.RFC3339, created)
-	a.UpdatedAt, _ = time.Parse(time.RFC3339, updated)
-	if published.Valid && published.String != "" {
-		if t, err := time.Parse(time.RFC3339, published.String); err == nil {
-			a.PublishedAt = &t
-		}
+	if published.Valid {
+		t := published.Time
+		a.PublishedAt = &t
 	}
 	return &a, nil
 }
 
 func (s *server) articleBySlug(slug string) (*Article, error) {
-	return scanArticle(s.db.QueryRow("SELECT "+articleCols+" FROM articles WHERE slug = ?", slug))
+	return scanArticle(s.db.QueryRow("SELECT "+articleCols+" FROM articles WHERE slug = $1", slug))
 }
 
 func (s *server) allArticles() ([]*Article, error) {
@@ -271,17 +265,17 @@ func (s *server) handleAdminCreate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 422, map[string]string{"error": msg})
 		return
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
-	var published any
+	now := time.Now().UTC()
+	var published *time.Time
 	if !in.Draft {
-		published = now
+		published = &now
 	}
 	_, err := s.db.Exec(`
 INSERT INTO articles (slug, title, markdown, html, summary, tags, draft, created_at, updated_at, published_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		in.Slug, in.Title, in.Markdown, htmlBody, in.Summary, tagsJSON, boolInt(in.Draft), now, now, published)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		in.Slug, in.Title, in.Markdown, htmlBody, in.Summary, tagsJSON, in.Draft, now, now, published)
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE") {
+		if isUniqueViolation(err) {
 			writeJSON(w, 422, map[string]string{"error": "slug 已存在"})
 			return
 		}
@@ -313,20 +307,18 @@ func (s *server) handleAdminUpdate(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 422, map[string]string{"error": msg})
 		return
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC()
 	// 首次从草稿转公开时记录发布时间
-	var published any
-	if cur.PublishedAt != nil {
-		published = cur.PublishedAt.Format(time.RFC3339)
-	} else if !in.Draft {
-		published = now
+	published := cur.PublishedAt
+	if published == nil && !in.Draft {
+		published = &now
 	}
 	_, err = s.db.Exec(`
-UPDATE articles SET slug=?, title=?, markdown=?, html=?, summary=?, tags=?, draft=?, updated_at=?, published_at=?
-WHERE id=?`,
-		in.Slug, in.Title, in.Markdown, htmlBody, in.Summary, tagsJSON, boolInt(in.Draft), now, published, cur.ID)
+UPDATE articles SET slug=$1, title=$2, markdown=$3, html=$4, summary=$5, tags=$6, draft=$7, updated_at=$8, published_at=$9
+WHERE id=$10`,
+		in.Slug, in.Title, in.Markdown, htmlBody, in.Summary, tagsJSON, in.Draft, now, published, cur.ID)
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE") {
+		if isUniqueViolation(err) {
 			writeJSON(w, 422, map[string]string{"error": "slug 已存在"})
 			return
 		}
@@ -336,8 +328,8 @@ WHERE id=?`,
 	}
 	// slug 变了,点赞评论跟着走
 	if in.Slug != slug {
-		s.db.Exec("UPDATE likes SET slug=? WHERE slug=?", in.Slug, slug)
-		s.db.Exec("UPDATE comments SET slug=? WHERE slug=?", in.Slug, slug)
+		s.db.Exec("UPDATE likes SET slug=$1 WHERE slug=$2", in.Slug, slug)
+		s.db.Exec("UPDATE comments SET slug=$1 WHERE slug=$2", in.Slug, slug)
 	}
 	a, _ := s.articleBySlug(in.Slug)
 	writeJSON(w, 200, articleToJSON(a))
@@ -345,7 +337,7 @@ WHERE id=?`,
 
 func (s *server) handleAdminDelete(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
-	res, err := s.db.Exec("DELETE FROM articles WHERE slug = ?", slug)
+	res, err := s.db.Exec("DELETE FROM articles WHERE slug = $1", slug)
 	if err != nil {
 		writeJSON(w, 500, map[string]string{"error": "删除失败"})
 		return

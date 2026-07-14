@@ -1,0 +1,39 @@
+# 生产部署:docker compose up -d --build
+# 配置写在同目录 .env(参考 .env.example),不要提交进 git。
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: site
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-site}
+      POSTGRES_DB: site
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U site']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    restart: always
+    ports:
+      - '127.0.0.1:8080:8080' # 只对本机开,外网走 Caddy/Nginx 反代
+    environment:
+      DATABASE_URL: postgres://site:${POSTGRES_PASSWORD:-site}@db:5432/site?sslmode=disable
+      SITE_BASE_URL: ${SITE_BASE_URL:-http://localhost:8080}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      ADMIN_GITHUB_LOGINS: ${ADMIN_GITHUB_LOGINS:-SongRunqi}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-yitiansong4@gmail.com}
+    volumes:
+      - uploads:/data # 上传的图片
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pg-data:
+  uploads:

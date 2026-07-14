@@ -15,7 +15,6 @@ import (
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
-	"golang.org/x/oauth2/google"
 )
 
 const (
@@ -39,24 +38,11 @@ type provider struct {
 	fetchUser func(ctx context.Context, client *http.Client) (id, email, name, avatar string, err error)
 }
 
-// initProviders 按环境变量装配 OAuth 提供方;未配置的会在 /api/auth/providers
-// 里标记为不可用,前端据此置灰按钮。
+// initProviders 装配 OAuth 提供方。本站只开 GitHub,且回调里只放行站长
+// 本人(见 handleOAuthCallback);未配置时登录页按钮置灰。
 func (s *server) initProviders() {
 	s.providers = map[string]*provider{}
 
-	if id, secret := envOr("GOOGLE_CLIENT_ID", ""), envOr("GOOGLE_CLIENT_SECRET", ""); id != "" && secret != "" {
-		s.providers["google"] = &provider{
-			name: "google",
-			config: &oauth2.Config{
-				ClientID:     id,
-				ClientSecret: secret,
-				Endpoint:     google.Endpoint,
-				RedirectURL:  s.baseURL + "/auth/google/callback",
-				Scopes:       []string{"openid", "email", "profile"},
-			},
-			fetchUser: fetchGoogleUser,
-		}
-	}
 	if id, secret := envOr("GITHUB_CLIENT_ID", ""), envOr("GITHUB_CLIENT_SECRET", ""); id != "" && secret != "" {
 		s.providers["github"] = &provider{
 			name: "github",
@@ -70,19 +56,6 @@ func (s *server) initProviders() {
 			fetchUser: fetchGitHubUser,
 		}
 	}
-}
-
-func fetchGoogleUser(ctx context.Context, client *http.Client) (id, email, name, avatar string, err error) {
-	var v struct {
-		ID      string `json:"id"`
-		Email   string `json:"email"`
-		Name    string `json:"name"`
-		Picture string `json:"picture"`
-	}
-	if err = getJSONAs(ctx, client, "https://www.googleapis.com/oauth2/v2/userinfo", &v); err != nil {
-		return
-	}
-	return v.ID, v.Email, v.Name, v.Picture, nil
 }
 
 func fetchGitHubUser(ctx context.Context, client *http.Client) (id, email, name, avatar string, err error) {
@@ -165,7 +138,6 @@ func (s *server) handleProviders(w http.ResponseWriter, r *http.Request) {
 		Configured bool   `json:"configured"`
 	}
 	out := []p{
-		{"google", s.providers["google"] != nil},
 		{"github", s.providers["github"] != nil},
 	}
 	writeJSON(w, 200, out)
@@ -226,6 +198,13 @@ func (s *server) handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 本站只有站长本人可以登录:身份不匹配就不建用户、不发会话。
+	if !s.isAdminIdentity(prov.name, pid, email) {
+		log.Printf("拒绝非站长登录:%s %s", prov.name, pid)
+		http.Redirect(w, r, "/login?error=owner-only", http.StatusFound)
+		return
+	}
+
 	user, err := s.upsertUser(prov.name, pid, email, name, avatar)
 	if err != nil {
 		log.Printf("写入用户失败:%v", err)
@@ -244,15 +223,15 @@ func (s *server) upsertUser(providerName, pid, email, name, avatar string) (*Use
 	isAdmin := s.isAdminIdentity(providerName, pid, email)
 	_, err := s.db.Exec(`
 INSERT INTO users (provider, provider_id, email, name, avatar_url, is_admin)
-VALUES (?, ?, ?, ?, ?, ?)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (provider, provider_id) DO UPDATE SET
 	email = excluded.email, name = excluded.name,
 	avatar_url = excluded.avatar_url, is_admin = excluded.is_admin`,
-		providerName, pid, email, name, avatar, boolInt(isAdmin))
+		providerName, pid, email, name, avatar, isAdmin)
 	if err != nil {
 		return nil, err
 	}
-	return s.userBy("provider = ? AND provider_id = ?", providerName, pid)
+	return s.userBy("provider = $1 AND provider_id = $2", providerName, pid)
 }
 
 // isAdminIdentity:邮箱在 ADMIN_EMAILS 里,或 GitHub 登录名在 ADMIN_GITHUB_LOGINS 里。
@@ -273,23 +252,14 @@ func (s *server) isAdminIdentity(providerName, pid, email string) bool {
 	return false
 }
 
-func boolInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
-
 func (s *server) userBy(where string, args ...any) (*User, error) {
 	var u User
-	var admin int
 	err := s.db.QueryRow(
 		"SELECT id, provider, email, name, avatar_url, is_admin FROM users WHERE "+where, args...).
-		Scan(&u.ID, &u.Provider, &u.Email, &u.Name, &u.AvatarURL, &admin)
+		Scan(&u.ID, &u.Provider, &u.Email, &u.Name, &u.AvatarURL, &u.IsAdmin)
 	if err != nil {
 		return nil, err
 	}
-	u.IsAdmin = admin == 1
 	return &u, nil
 }
 
@@ -297,8 +267,8 @@ func (s *server) createSession(w http.ResponseWriter, userID int64) error {
 	token := randomToken()
 	expires := time.Now().Add(sessionTTL)
 	if _, err := s.db.Exec(
-		"INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)",
-		token, userID, expires.UTC().Format(time.RFC3339)); err != nil {
+		"INSERT INTO sessions (token, user_id, expires_at) VALUES ($1, $2, $3)",
+		token, userID, expires); err != nil {
 		return err
 	}
 	http.SetCookie(w, &http.Cookie{
@@ -315,17 +285,17 @@ func (s *server) currentUser(r *http.Request) *User {
 		return nil
 	}
 	var userID int64
-	var expires string
-	err = s.db.QueryRow("SELECT user_id, expires_at FROM sessions WHERE token = ?", c.Value).
+	var expires time.Time
+	err = s.db.QueryRow("SELECT user_id, expires_at FROM sessions WHERE token = $1", c.Value).
 		Scan(&userID, &expires)
 	if err != nil {
 		return nil
 	}
-	if t, err := time.Parse(time.RFC3339, expires); err != nil || time.Now().After(t) {
-		s.db.Exec("DELETE FROM sessions WHERE token = ?", c.Value)
+	if time.Now().After(expires) {
+		s.db.Exec("DELETE FROM sessions WHERE token = $1", c.Value)
 		return nil
 	}
-	u, err := s.userBy("id = ?", userID)
+	u, err := s.userBy("id = $1", userID)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			log.Printf("查用户失败:%v", err)
@@ -337,7 +307,7 @@ func (s *server) currentUser(r *http.Request) *User {
 
 func (s *server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(sessionCookie); err == nil {
-		s.db.Exec("DELETE FROM sessions WHERE token = ?", c.Value)
+		s.db.Exec("DELETE FROM sessions WHERE token = $1", c.Value)
 	}
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1})
 	writeJSON(w, 200, map[string]bool{"ok": true})

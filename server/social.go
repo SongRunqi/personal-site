@@ -24,14 +24,14 @@ func (s *server) socialRoutes(mux *http.ServeMux) {
 func (s *server) handleLikes(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	var count int
-	if err := s.db.QueryRow("SELECT COUNT(*) FROM likes WHERE slug = ?", slug).Scan(&count); err != nil {
+	if err := s.db.QueryRow("SELECT COUNT(*) FROM likes WHERE slug = $1", slug).Scan(&count); err != nil {
 		writeJSON(w, 500, map[string]string{"error": "读取失败"})
 		return
 	}
 	liked := false
 	if u := s.currentUser(r); u != nil {
 		var n int
-		s.db.QueryRow("SELECT COUNT(*) FROM likes WHERE slug = ? AND user_id = ?", slug, u.ID).Scan(&n)
+		s.db.QueryRow("SELECT COUNT(*) FROM likes WHERE slug = $1 AND user_id = $2", slug, u.ID).Scan(&n)
 		liked = n > 0
 	}
 	writeJSON(w, 200, map[string]any{"count": count, "liked": liked})
@@ -49,21 +49,21 @@ func (s *server) handleToggleLike(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 404, map[string]string{"error": "文章不存在"})
 		return
 	}
-	res, err := s.db.Exec("DELETE FROM likes WHERE slug = ? AND user_id = ?", slug, u.ID)
+	res, err := s.db.Exec("DELETE FROM likes WHERE slug = $1 AND user_id = $2", slug, u.ID)
 	if err != nil {
 		writeJSON(w, 500, map[string]string{"error": "操作失败"})
 		return
 	}
 	liked := false
 	if n, _ := res.RowsAffected(); n == 0 {
-		if _, err := s.db.Exec("INSERT INTO likes (user_id, slug) VALUES (?, ?)", u.ID, slug); err != nil {
+		if _, err := s.db.Exec("INSERT INTO likes (user_id, slug) VALUES ($1, $2)", u.ID, slug); err != nil {
 			writeJSON(w, 500, map[string]string{"error": "操作失败"})
 			return
 		}
 		liked = true
 	}
 	var count int
-	s.db.QueryRow("SELECT COUNT(*) FROM likes WHERE slug = ?", slug).Scan(&count)
+	s.db.QueryRow("SELECT COUNT(*) FROM likes WHERE slug = $1", slug).Scan(&count)
 	writeJSON(w, 200, map[string]any{"count": count, "liked": liked})
 }
 
@@ -82,8 +82,6 @@ type commentJSON struct {
 
 func (s *server) handleComments(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
-	// 注意:必须先查当前用户再开 rows——连接池只有一个连接,
-	// rows 未关闭时再发查询会死锁。
 	var me int64 = -1
 	if u := s.currentUser(r); u != nil {
 		me = u.ID
@@ -95,7 +93,7 @@ func (s *server) handleComments(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.db.Query(`
 SELECT c.id, c.body, c.created_at, c.user_id, u.name, u.avatar_url
 FROM comments c JOIN users u ON u.id = c.user_id
-WHERE c.slug = ? ORDER BY c.created_at ASC, c.id ASC`, slug)
+WHERE c.slug = $1 ORDER BY c.created_at ASC, c.id ASC`, slug)
 	if err != nil {
 		writeJSON(w, 500, map[string]string{"error": "读取失败"})
 		return
@@ -105,10 +103,12 @@ WHERE c.slug = ? ORDER BY c.created_at ASC, c.id ASC`, slug)
 	for rows.Next() {
 		var c commentJSON
 		var userID int64
-		if err := rows.Scan(&c.ID, &c.Body, &c.CreatedAt, &userID, &c.Author.Name, &c.Author.AvatarURL); err != nil {
+		var created time.Time
+		if err := rows.Scan(&c.ID, &c.Body, &created, &userID, &c.Author.Name, &c.Author.AvatarURL); err != nil {
 			writeJSON(w, 500, map[string]string{"error": "读取失败"})
 			return
 		}
+		c.CreatedAt = created.UTC().Format(time.RFC3339)
 		c.Mine = me == -2 || userID == me
 		out = append(out, c)
 	}
@@ -142,19 +142,20 @@ func (s *server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 422, map[string]string{"error": "留言太长(最多 2000 字)"})
 		return
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
-	res, err := s.db.Exec("INSERT INTO comments (slug, user_id, body, created_at) VALUES (?, ?, ?, ?)",
-		slug, u.ID, body, now)
+	now := time.Now().UTC()
+	var id int64
+	err := s.db.QueryRow(
+		"INSERT INTO comments (slug, user_id, body, created_at) VALUES ($1, $2, $3, $4) RETURNING id",
+		slug, u.ID, body, now).Scan(&id)
 	if err != nil {
 		log.Printf("写评论失败:%v", err)
 		writeJSON(w, 500, map[string]string{"error": "保存失败"})
 		return
 	}
-	id, _ := res.LastInsertId()
 	var c commentJSON
 	c.ID = id
 	c.Body = body
-	c.CreatedAt = now
+	c.CreatedAt = now.Format(time.RFC3339)
 	c.Author.Name = u.Name
 	c.Author.AvatarURL = u.AvatarURL
 	c.Mine = true
@@ -175,9 +176,9 @@ func (s *server) handleDeleteComment(w http.ResponseWriter, r *http.Request) {
 	}
 	var res interface{ RowsAffected() (int64, error) }
 	if u.IsAdmin {
-		res, err = s.db.Exec("DELETE FROM comments WHERE id = ?", id)
+		res, err = s.db.Exec("DELETE FROM comments WHERE id = $1", id)
 	} else {
-		res, err = s.db.Exec("DELETE FROM comments WHERE id = ? AND user_id = ?", id, u.ID)
+		res, err = s.db.Exec("DELETE FROM comments WHERE id = $1 AND user_id = $2", id, u.ID)
 	}
 	if err != nil {
 		writeJSON(w, 500, map[string]string{"error": "删除失败"})
