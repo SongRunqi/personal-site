@@ -86,12 +86,6 @@ export default function App() {
       <div className="wrap">
         <footer className="footer">
           <span>宋一天 · 手写的一方角落</span>
-          <span>
-            <a href="https://github.com/SongRunqi" target="_blank" rel="noopener noreferrer">
-              GitHub
-            </a>{' '}
-            · <a href="/feed.xml">RSS</a> · <a href="mailto:yitiansong4@gmail.com">邮箱</a>
-          </span>
         </footer>
       </div>
     </AuthProvider>

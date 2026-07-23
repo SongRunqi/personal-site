@@ -26,22 +26,6 @@ export default function About() {
           </p>
         </div>
       </div>
-      <ul className="contact-list">
-        <li>
-          <span className="label">GitHub</span>
-          <a href="https://github.com/SongRunqi" target="_blank" rel="noopener noreferrer">
-            github.com/SongRunqi
-          </a>
-        </li>
-        <li>
-          <span className="label">邮箱</span>
-          <a href="mailto:yitiansong4@gmail.com">yitiansong4@gmail.com</a>
-        </li>
-        <li>
-          <span className="label">订阅</span>
-          <a href="/feed.xml">RSS(/feed.xml)</a>
-        </li>
-      </ul>
     </div>
   )
 }

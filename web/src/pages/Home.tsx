@@ -26,11 +26,7 @@ export default function Home() {
             </span>
           </h1>
           <p className="lede fade-up d2">
-            我是宋一天(
-            <a href="https://github.com/SongRunqi" target="_blank" rel="noopener noreferrer">
-              SongRunqi
-            </a>
-            ),一个人做产品:开源桌面 AI 助手 <em>onething</em>、菜单栏翻译工具
+            我是宋一天,一个人做产品:开源桌面 AI 助手 <em>onething</em>、菜单栏翻译工具
             TransReader。做的过程里踩过的坑、想明白的事,都写在这里。
           </p>
           <div className="hero-actions fade-up d3">

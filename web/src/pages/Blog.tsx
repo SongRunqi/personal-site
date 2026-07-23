@@ -14,7 +14,7 @@ export default function Blog() {
       <header className="page-head">
         <h1>博客</h1>
         <p>
-          开发笔记、踩坑记录,偶尔一点随想。也可以用 <a href="/feed.xml">RSS</a> 订阅。
+          开发笔记、踩坑记录,偶尔一点随想。
         </p>
       </header>
       <section className="section" style={{ borderTop: 'none', paddingTop: 24 }}>
